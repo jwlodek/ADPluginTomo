@@ -30,11 +30,11 @@
 
 // Error message formatters
 #define ERR(msg)                                                                                 \
-    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "ERROR | %s::%s: %s\n", pluginName, functionName, \
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "ERR  | %s::%s: %s\n", pluginName, functionName, \
               msg)
 
 #define ERR_ARGS(fmt, ...)                                                              \
-    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "ERROR | %s::%s: " fmt "\n", pluginName, \
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "ERR  | %s::%s: " fmt "\n", pluginName, \
               functionName, __VA_ARGS__);
 
 // Warning message formatters
@@ -47,10 +47,10 @@
 
 // Log message formatters
 #define LOG(msg) \
-    asynPrint(pasynUserSelf, ASYN_TRACEIO_DRIVER, "%s::%s: %s\n", pluginName, functionName, msg)
+    asynPrint(pasynUserSelf, ASYN_TRACEIO_DRIVER, "LOG  | %s::%s: %s\n", pluginName, functionName, msg)
 
 #define LOG_ARGS(fmt, ...)                                                                       \
-    asynPrint(pasynUserSelf, ASYN_TRACEIO_DRIVER, "%s::%s: " fmt "\n", pluginName, functionName, \
+    asynPrint(pasynUserSelf, ASYN_TRACEIO_DRIVER, "LOG  | %s::%s: " fmt "\n", pluginName, functionName, \
               __VA_ARGS__);
 
 
@@ -63,6 +63,44 @@ using namespace std;
 
 // Name of the plugin
 static const char *pluginName="NDPluginTomo";
+
+
+int sockInit(void)
+{
+  #ifdef _WIN32
+    WSADATA wsa_data;
+    return WSAStartup(MAKEWORD(1,1), &wsa_data);
+  #else
+    return 0;
+  #endif
+}
+
+int sockQuit(void)
+{
+  #ifdef _WIN32
+    return WSACleanup();
+  #else
+    return 0;
+  #endif
+}
+
+
+int sockClose(SOCKET sock)
+{
+
+  int status = 0;
+
+  #ifdef _WIN32
+    status = shutdown(sock, SD_BOTH);
+    if (status == 0) { status = closesocket(sock); }
+  #else
+    status = shutdown(sock, SHUT_RDWR);
+    if (status == 0) { status = close(sock); }
+  #endif
+
+  return status;
+
+}
 
 
 /**
@@ -120,8 +158,15 @@ void NDPluginTomo::processCallbacks(NDArray *pArray){
     //unlock the mutex for the processing portion
     this->unlock();
 
-    // This sets the output of the plugin to the input array
-    pScratch = pArray;
+    double timeStamp = pArray->timeStamp;
+    size_t numBytes = arrayInfo.totalBytes;
+    size_t xSize = arrayInfo.xSize;
+    size_t ySize = arrayInfo.ySize;
+    size_t colorChannels = arrayInfo.colorSize;
+
+    // Allocate memory for data to send over 
+    //void* imgData = calloc(numBytes, 1);
+    //memcpy(imgData, pArray->pData, numBytes);
 
     // If we are manipulating the image/output, we allocate a new scratch frame
     // You will need to specify dimensions, and data type.
@@ -178,7 +223,43 @@ NDPluginTomo::NDPluginTomo(
         ASYN_MULTIDEVICE, 1, priority, stackSize, maxThreads)
 {
 
+    const char* functionName = "NDPluginTomo";
     char versionString[25];
+
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1) {
+        ERR("Failed to create Socket!");
+    } else {
+
+        serveraddr = (struct sockaddr_in*) calloc(1, sizeof(struct sockaddr_in));
+
+        serveraddr->sin_family = AF_INET;
+        serveraddr->sin_addr.s_addr = htonl(INADDR_ANY);
+        serveraddr->sin_port = htons(PORT);
+
+        if ((bind(sockfd, (SA*) serveraddr, sizeof(struct sockaddr_in))) != 0) {
+            printf("socket bind failed...\n");
+        }
+        else
+            printf("Socket successfully binded..\n");
+
+
+    if ((listen(sockfd, 5)) != 0) {
+        printf("Listen failed...\n");
+        exit(0);
+    }
+    else
+        printf("Server listening..\n");
+
+    len = sizeof(struct sockaddr_in);
+    connfd = accept(sockfd, (SA*) clientaddr, &len);
+    if (connfd < 0) {
+        printf("server accept failed...\n");
+        exit(0);
+    }
+    else
+        printf("server accept the client...\n");
 
     // Initialize Parameters here, using the string vals and indexes from the header. Ex:
     // createParam(NDPluginTomoOctetString, 	asynParamOctet, 	&NDPluginTomoOctet);  -> asynParamOctet records (stringin, stringout, waveform) 
@@ -186,11 +267,12 @@ NDPluginTomo::NDPluginTomo(
     // createParam(NDPluginTomoFloatString, 	asynParamFloat64, 	&NDPluginTomoFloat);  -> asynParamFloat64 records (ao, ai, waveform) 
 
 
-    // Set some basic plugin info Params
-    setStringParam(NDPluginDriverPluginType, "NDPluginTomo");
-    epicsSnprintf(versionString, sizeof(versionString), "%d.%d.%d", TOMO_VERSION, TOMO_REVISION, TOMO_MODIFICATION);
-    setStringParam(NDDriverVersion, versionString);
-    connectToArrayPort();
+        // Set some basic plugin info Params
+        setStringParam(NDPluginDriverPluginType, "NDPluginTomo");
+        epicsSnprintf(versionString, sizeof(versionString), "%d.%d.%d", TOMO_VERSION, TOMO_REVISION, TOMO_MODIFICATION);
+        setStringParam(NDDriverVersion, versionString);
+        connectToArrayPort();
+    }
 }
 
 

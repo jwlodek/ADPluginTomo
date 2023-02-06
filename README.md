@@ -1,6 +1,6 @@
 # ADPluginTomo
 
-Repository containing Tomo areaDetector plugin source code.
+An `areaDetector` plugin designed to stream tomographic detector data into a real time reconstruction client during acquisiton.
 
 ### Installation
 
@@ -15,7 +15,7 @@ Note that `ADSupport`, `ADCore`, and any external dependencies must be built/ins
 Next, open `$(AREA_DETECTOR)/configure/RELEASE_PRODS.local`, and add:
 
 ```
-ADPLUGINTOMO=$(AREA_DETECTOR)/ADPluginNameTomo
+ADPLUGINTOMO=$(AREA_DETECTOR)/ADPluginTomo
 ```
 
 Then, add the following to `$(AREA_DETECTOR)/ADCore/ADApp/commonDriverMakefile`
