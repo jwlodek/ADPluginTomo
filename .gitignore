@@ -1,0 +1,12 @@
+*~
+*#
+bin
+lib
+include
+db
+dbd
+envPaths
+O.*
+*.swp
+.vscode/
+__pycache__/
