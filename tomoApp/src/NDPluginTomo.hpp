@@ -27,6 +27,8 @@
   #include <unistd.h> /* Needed for close() */
 #endif
 
+#include "NSLS2TomoStreamProtocol.hpp"
+
 
 using namespace std;
 
@@ -38,7 +40,7 @@ using namespace std;
 #define TOMO_REVISION       0
 #define TOMO_MODIFICATION   0
 
-#define PORT 8080
+#define PORT 8090
 #define SA struct sockaddr
 
 
@@ -56,6 +58,7 @@ class NDPluginTomo : public NDPluginDriver {
             const char* NDArrayPort, int NDArrayAddr, int maxBuffers,
             size_t maxMemory, int priority, int stackSize, int maxThreads);
 
+        ~NDPluginTomo();
 
         void processCallbacks(NDArray *pArray);
 

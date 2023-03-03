@@ -85,7 +85,7 @@ int sockQuit(void)
 }
 
 
-int sockClose(SOCKET sock)
+int sockClose(int sock)
 {
 
   int status = 0;
@@ -150,20 +150,34 @@ void NDPluginTomo::processCallbacks(NDArray *pArray){
     // If false, no downstream callbacks will be performed
     bool performCallbacks = true;
 
+    printf("Here\n");
+
+
     //call base class and get information about frame
     NDPluginDriver::beginProcessCallbacks(pArray);
 
     pArray->getInfo(&arrayInfo);
 
+    printf("Here2\n");
+
     //unlock the mutex for the processing portion
     this->unlock();
 
-    double timeStamp = pArray->timeStamp;
-    size_t numBytes = arrayInfo.totalBytes;
-    size_t xSize = arrayInfo.xSize;
-    size_t ySize = arrayInfo.ySize;
-    size_t colorChannels = arrayInfo.colorSize;
+    NSLS2TomoStreamProtocolHeader_t header;
+    //header.frame_type = PROJECTION_FRAME;
+    //header.reference_type = REF_TIMESTAMP;
+    header.frame_type = 19;
+    header.reference_type = 22;
+    header.num_bytes = arrayInfo.totalBytes;
+    header.x_size = arrayInfo.xSize;
+    header.y_size = arrayInfo.ySize;
+    header.color_channels = arrayInfo.colorSize;
+    //header.reference = pArray->timeStamp;
+    header.reference = 1234567;
 
+    printf("TOMO Plugin Recvd frame %d\n", sizeof(NSLS2TomoStreamProtocolHeader_t));
+    size_t ret = send(connfd, &header, 48, MSG_CONFIRM);
+    printf("Sent %d bytes\n", ret);
     // Allocate memory for data to send over 
     //void* imgData = calloc(numBytes, 1);
     //memcpy(imgData, pArray->pData, numBytes);
@@ -199,7 +213,7 @@ void NDPluginTomo::processCallbacks(NDArray *pArray){
         return;
     }
 
-    NDPluginDriver::endProcessCallbacks(pScratch, false, performCallbacks);
+    NDPluginDriver::endProcessCallbacks(pArray, true, true);
 
     // If pScratch was allocated in this function, make sure to release it.
     // pScratch.release()
@@ -225,27 +239,32 @@ NDPluginTomo::NDPluginTomo(
 
     const char* functionName = "NDPluginTomo";
     char versionString[25];
+    int opt = 1;
 
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		perror("socket failed");
+		exit(EXIT_FAILURE);
+	}
+    else {
+	if (setsockopt(sockfd, SOL_SOCKET,
+				SO_REUSEADDR | SO_REUSEPORT, &opt,
+				sizeof(opt))) {
+		perror("setsockopt");
+		exit(EXIT_FAILURE);
+	}
+	serveraddr->sin_family = AF_INET;
+	serveraddr->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	//serveraddr.sin_addr.s_addr = INADDR_ANY;
+	serveraddr->sin_port = htons(PORT);
 
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == -1) {
-        ERR("Failed to create Socket!");
-    } else {
-
-        serveraddr = (struct sockaddr_in*) calloc(1, sizeof(struct sockaddr_in));
-
-        serveraddr->sin_family = AF_INET;
-        serveraddr->sin_addr.s_addr = htonl(INADDR_ANY);
-        serveraddr->sin_port = htons(PORT);
-
-        if ((bind(sockfd, (SA*) serveraddr, sizeof(struct sockaddr_in))) != 0) {
-            printf("socket bind failed...\n");
+        if((bind(sockfd, (struct sockaddr*) serveraddr, sizeof(struct sockaddr))) != 0) {
+            printf("Socket bind failed...\n");
         }
         else
             printf("Socket successfully binded..\n");
 
 
-    if ((listen(sockfd, 5)) != 0) {
+    if ((listen(sockfd, 3)) != 0) {
         printf("Listen failed...\n");
         exit(0);
     }
@@ -253,7 +272,7 @@ NDPluginTomo::NDPluginTomo(
         printf("Server listening..\n");
 
     len = sizeof(struct sockaddr_in);
-    connfd = accept(sockfd, (SA*) clientaddr, &len);
+    connfd = accept(sockfd, (struct sockaddr*) clientaddr, (socklen_t*) &len);
     if (connfd < 0) {
         printf("server accept failed...\n");
         exit(0);
@@ -275,6 +294,12 @@ NDPluginTomo::NDPluginTomo(
     }
 }
 
+
+NDPluginTomo::~NDPluginTomo(){
+    printf("Closing socket...\n");
+    close(connfd);
+    shutdown(sockfd, SHUT_RDWR);
+}
 
 
 /**
