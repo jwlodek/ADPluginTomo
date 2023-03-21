@@ -146,6 +146,8 @@ void NDPluginTomo::processCallbacks(NDArray *pArray){
     asynStatus status = asynSuccess;
     NDArrayInfo arrayInfo;
 
+
+
     // If set to true, downstream plugins will perform callbacks on output pScratch
     // If false, no downstream callbacks will be performed
     bool performCallbacks = true;
@@ -294,6 +296,7 @@ NDPluginTomo::NDPluginTomo(
     createParam(NDPluginTomoFrameTypeString,  asynParamInt32, &NDTomo_FrameType);
     createParam(NDPluginTomoConnectString,  asynParamInt32, &NDTomo_Connect);
     createParam(NDPluginTomoConnectionStatusString,  asynParamInt32, &NDTomo_ConnectionStatus);
+    createParam(NDPluginTomoAngleIncrementString,  asynParamFloat64, &NDTomo_AngleIncrement);
 
 
         // Set some basic plugin info Params

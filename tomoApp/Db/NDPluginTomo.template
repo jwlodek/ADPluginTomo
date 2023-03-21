@@ -91,3 +91,22 @@ record(mbbi, "$(P)$(R)ConnectionStatus_RBV"){
     field(VAL,  "0")
     field(SCAN, "I/O Intr")
 }
+
+
+record(ao, "$(P)$(R)AngleIncrement"){
+    field(PINI, "YES")
+    field(DTYP, "asynFloat64")
+    field(VAL, "0.2")
+    field(PREC, "2")
+    field(EGU, "deg")
+    field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NDTOMO_ANGLE_INC")
+    info(autosaveFields, "VAL")
+}
+
+record(ai, "$(P)$(R)AngleIncrement_RBV"){
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NDTOMO_ANGLE_INC")
+    field(PREC, "2")
+    field(EGU, "deg")
+    field(SCAN, "I/O Intr")
+}
