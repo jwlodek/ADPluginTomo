@@ -30,6 +30,7 @@ typedef struct NSLS2TomoStreamProtocolHeader {
     uint8_t protocol_version_patch = NSLS2_TOMO_STREAM_PROTOCOL_VERSION_PATCH;
     uint8_t frame_type;
     uint8_t reference_type;
+    uint8_t dataType;
     double reference;
     size_t num_bytes;
     size_t x_size;

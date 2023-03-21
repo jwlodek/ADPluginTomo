@@ -166,28 +166,37 @@ void NDPluginTomo::processCallbacks(NDArray *pArray){
     NSLS2TomoStreamProtocolHeader_t header;
     //header.frame_type = PROJECTION_FRAME;
     //header.reference_type = REF_TIMESTAMP;
-    header.frame_type = 19;
-    header.reference_type = 22;
+    header.frame_type = 0;
+    header.reference_type = 1;
+    header.dataType = (uint8_t) pArray->dataType;
+    header.reference = 3;
+
     header.num_bytes = arrayInfo.totalBytes;
     header.x_size = arrayInfo.xSize;
     header.y_size = arrayInfo.ySize;
     header.color_channels = arrayInfo.colorSize;
     //header.reference = pArray->timeStamp;
-    header.reference = 1234567;
+
+    printf("%d\n", sizeof(header));
+    printf("%d\n", sizeof(double));
+    printf("%d\n", sizeof(size_t));
 
     printf("TOMO Plugin Recvd frame %d\n", sizeof(NSLS2TomoStreamProtocolHeader_t));
     size_t ret = send(connfd, &header, 48, MSG_CONFIRM);
     printf("Sent %d bytes\n", ret);
-    // Allocate memory for data to send over 
-    //void* imgData = calloc(numBytes, 1);
-    //memcpy(imgData, pArray->pData, numBytes);
 
+    // Allocate memory for data to send over 
+    void* imgData = calloc(arrayInfo.totalBytes, 1);
+    memcpy(imgData, pArray->pData, arrayInfo.totalBytes);
+
+    size_t ret_img = send(connfd, imgData, arrayInfo.totalBytes, MSG_CONFIRM);
+    printf("Sent %d bytes of image data\n", ret_img);
+    free(imgData);
     // If we are manipulating the image/output, we allocate a new scratch frame
     // You will need to specify dimensions, and data type.
 
     //pScratch = pNDArrayPool->alloc(ndims, dims, dataType, 0, NULL
     //if(pScratch == NULL){
-    //    ERR("Unable to allocate frame.")
     //    return;
     //}
     
