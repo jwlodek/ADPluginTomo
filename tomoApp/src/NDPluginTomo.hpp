@@ -51,21 +51,15 @@ using namespace std;
 #define NDPluginTomoConnectString           "NDTOMO_CONN"         //asynInt32
 #define NDPluginTomoConnectionStatusString  "NDTOMO_CONN_STATUS"  //asynInt32
 #define NDPluginTomoAngleIncrementString    "NDTOMO_ANGLE_INC"    //asynFloat64
+#define NDPluginTomoLastAngleString         "NDTOMO_LAST_ANGLE"   //asynFloat64
 
 
-// Define all necessary tpyes, structs, and enums here
+typedef enum TomoConnStatus {
+  TOMO_STREAM_DISCONNECTED = 0,
+  TOMO_STREAM_AWAITING_CONNECTION = 1,
+  TOMO_STREAM_CONNECTED = 2,
+} TomoConnStatus_t;
 
-typedef enum TomoFrameType {
-    TOMO_DARK_FRAME = 0,
-    TOMO_BKGD_FRAME = 1,
-    TOMO_DATA_FRAME = 2,
-} TomoFrameType_t;
-
-
-typedef enum TomoReferenceType {
-  TOMO_REF_TIMESTAMP = 0,
-  TOMO_REF_ANGLE = 1,
-} TomoReferenceType_t;
 
 /* Plugin class, extends plugin driver */
 class NDPluginTomo : public NDPluginDriver {
@@ -76,6 +70,7 @@ class NDPluginTomo : public NDPluginDriver {
 
         ~NDPluginTomo();
 
+        void connectToClient(void* pPvt);
         void processCallbacks(NDArray *pArray);
 
         virtual asynStatus writeInt32(asynUser* pasynUser, epicsInt32 value);
@@ -89,9 +84,11 @@ class NDPluginTomo : public NDPluginDriver {
         int NDTomo_Connect;
         int NDTomo_ConnectionStatus;
         int NDTomo_AngleIncrement;
+        int NDTomo_LastAngle;
         // Define these two variables as the first and last param indexes.
         #define ND_TOMO_FIRST_PARAM NDTomo_FrameID
-        #define ND_TOMO_LAST_PARAM NDTomo_AngleIncrement
+        #define ND_TOMO_LAST_PARAM NDTomo_LastAngle
+
 
     private:
 

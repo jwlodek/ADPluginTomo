@@ -11,9 +11,9 @@
 #define NSLS2_TOMO_STREAM_PROTOCOL_VERSION_PATCH 1
 
 typedef enum NSLS2TomoStreamProtocolFrameType {
-    PROJECTION_FRAME = 0,
-    DARK_FRAME = 1,
-    BACKGROUND_FRAME = 2,
+    DARK_FRAME = 0,
+    BACKGROUND_FRAME = 1,
+    PROJECTION_FRAME = 2,
 } NSLS2TomoStreamProtocolFrameType_t;
 
 

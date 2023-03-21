@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import cv2
 import socket
 import numpy as np
 import struct
@@ -75,9 +74,6 @@ def client():
         for i in range(10):
             start = i * 2
             print(f"Pixel value of pixel {i}: {int.from_bytes(img_data[start:start+1], 'little')}")
-
-        img = np.frombuffer(img_data, dtype=header.dtype).reshape((header.x_size, header.y_size, 1))
-        cv2.imshow('Test', img)
 
 
 

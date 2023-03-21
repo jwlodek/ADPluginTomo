@@ -19,6 +19,7 @@
 
 
 //include epics/area detector libraries
+#include <epicsExit.h>
 #include <epicsMutex.h>
 #include <epicsString.h>
 #include <iocsh.h>
@@ -47,10 +48,10 @@
 
 // Log message formatters
 #define LOG(msg) \
-    asynPrint(pasynUserSelf, ASYN_TRACEIO_DRIVER, "LOG  | %s::%s: %s\n", pluginName, functionName, msg)
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "LOG  | %s::%s: %s\n", pluginName, functionName, msg)
 
 #define LOG_ARGS(fmt, ...)                                                                       \
-    asynPrint(pasynUserSelf, ASYN_TRACEIO_DRIVER, "LOG  | %s::%s: " fmt "\n", pluginName, functionName, \
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "LOG  | %s::%s: " fmt "\n", pluginName, functionName, \
               __VA_ARGS__);
 
 
@@ -103,6 +104,77 @@ int sockClose(int sock)
 }
 
 
+static void exitCallback(void* pPvt) {
+    NDPluginTomo* pNDPluginTomo = (NDPluginTomo*) pPvt;
+    delete pNDPluginTomo;
+}
+
+static void connectToClientThread(void* pPvt) {
+    NDPluginTomo* pNDPluginTomo = (NDPluginTomo*) pPvt;
+    pNDPluginTomo->connectToClient(pNDPluginTomo);
+}
+
+
+void NDPluginTomo::connectToClient(void* pPvt){
+    printf("Here2\n");
+    const char* functionName = "connectToClient";
+    int opt = 1;
+    TomoConnStatus_t connectionStatus;
+    getIntegerParam(NDTomo_ConnectionStatus, (int*) &connectionStatus);
+
+    if (connectionStatus == TOMO_STREAM_CONNECTED){
+        WARN("Client already connected!");
+        return;
+    }
+
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        ERR("Socket creation failed!");
+        return;
+    } else {
+        printf("Created socket\n");
+        if (setsockopt(sockfd, SOL_SOCKET,
+                SO_REUSEADDR | SO_REUSEPORT, &opt,
+                sizeof(opt))) {
+            ERR("Operation: setsockopt failed!");
+            return;
+        }
+        serveraddr->sin_family = AF_INET;
+        serveraddr->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        //serveraddr.sin_addr.s_addr = INADDR_ANY;
+        serveraddr->sin_port = htons(PORT);
+        printf("Binding to socket\n");
+        if((bind(sockfd, (struct sockaddr*) serveraddr, sizeof(struct sockaddr))) != 0) {
+            ERR("Socket binding failed!");
+        } else {
+            LOG("Socket successfully binded.\n");
+        }
+
+        if ((listen(sockfd, 3)) != 0) {
+            ERR("Failed to listen on bound socket!");
+            return;
+        } else {
+            LOG("Server listening and awaiting client connection...");
+        }
+
+        setIntegerParam(NDTomo_ConnectionStatus, TOMO_STREAM_AWAITING_CONNECTION);
+        callParamCallbacks();
+
+        len = sizeof(struct sockaddr_in);
+        connfd = accept(sockfd, (struct sockaddr*) clientaddr, (socklen_t*) &len);
+        if (connfd < 0) {
+            setIntegerParam(NDTomo_ConnectionStatus, TOMO_STREAM_DISCONNECTED);
+            ERR("Server failed to accept client!");
+            exit(0);
+        } else {
+            setIntegerParam(NDTomo_ConnectionStatus, TOMO_STREAM_CONNECTED);
+            LOG("Connected to client.");
+        }
+        callParamCallbacks();
+    }
+}
+
+
+
 /**
  * Override of NDPluginDriver function. Must be implemented by your plugin
  *
@@ -142,25 +214,34 @@ asynStatus NDPluginTomo::writeInt32(asynUser* pasynUser, epicsInt32 value){
 */
 void NDPluginTomo::processCallbacks(NDArray *pArray){
     static const char* functionName = "processCallbacks";
-    NDArray *pScratch;
-    asynStatus status = asynSuccess;
     NDArrayInfo arrayInfo;
+    double lastAngle, newAngle, angleIncrement;
+
+    TomoConnStatus_t connectionStatus;
+    getIntegerParam(NDTomo_ConnectionStatus, (int*) &connectionStatus);
+    if(connectionStatus == TOMO_STREAM_DISCONNECTED) {
+        WARN("No client connected, spawning connection thread...");
+        epicsThreadCreate("ClientConnectionThread", epicsThreadPriorityMedium, 
+                           epicsThreadStackMedium, connectToClientThread, this);
+        return;
+    } else if(connectionStatus == TOMO_STREAM_AWAITING_CONNECTION) {
+        LOG("Waiting for client connection...");
+        return;
+    }
+
+    NSLS2TomoStreamProtocolFrameType_t frameType;
+    NSLS2TomoStreamProtocolRefType_t refType;
+    getIntegerParam(NDTomo_FrameType, (int*) &frameType);
+    getIntegerParam(NDTomo_FrameID, (int*) &refType);
 
 
-
-    // If set to true, downstream plugins will perform callbacks on output pScratch
-    // If false, no downstream callbacks will be performed
-    bool performCallbacks = true;
-
-    printf("Here\n");
-
+    getDoubleParam(NDTomo_LastAngle, &lastAngle);
+    getDoubleParam(NDTomo_AngleIncrement, &angleIncrement);
 
     //call base class and get information about frame
     NDPluginDriver::beginProcessCallbacks(pArray);
 
     pArray->getInfo(&arrayInfo);
-
-    printf("Here2\n");
 
     //unlock the mutex for the processing portion
     this->unlock();
@@ -168,61 +249,49 @@ void NDPluginTomo::processCallbacks(NDArray *pArray){
     NSLS2TomoStreamProtocolHeader_t header;
     //header.frame_type = PROJECTION_FRAME;
     //header.reference_type = REF_TIMESTAMP;
-    header.frame_type = 0;
-    header.reference_type = 1;
+    header.frame_type = frameType;
+    header.reference_type = refType;
     header.dataType = (uint8_t) pArray->dataType;
-    header.reference = 3;
+
+    newAngle = lastAngle + angleIncrement;
+    if(refType == REF_TIMESTAMP) {
+        header.reference = pArray->timeStamp;
+    } else {
+        header.reference = newAngle;
+    }
 
     header.num_bytes = arrayInfo.totalBytes;
     header.x_size = arrayInfo.xSize;
     header.y_size = arrayInfo.ySize;
     header.color_channels = arrayInfo.colorSize;
-    //header.reference = pArray->timeStamp;
 
-    printf("%d\n", sizeof(header));
-    printf("%d\n", sizeof(double));
-    printf("%d\n", sizeof(size_t));
+    LOG("Sending header to client...");
+    size_t ret = send(connfd, &header, sizeof(NSLS2TomoStreamProtocolHeader_t), MSG_CONFIRM);
+    if((int) ret < 0){
+        ERR("Failed to transmit header to client - socket disconnected!");
+        close(connfd);
+        shutdown(sockfd, SHUT_RDWR);
+        setIntegerParam(NDTomo_ConnectionStatus, TOMO_STREAM_DISCONNECTED);
+        callParamCallbacks();
+    } else {
+        LOG_ARGS("Sent %d bytes", (int) ret);
+        LOG("Sending image data buffer to client...");
+        size_t ret_img = send(connfd, pArray->pData, arrayInfo.totalBytes, MSG_CONFIRM);
+        if((int) ret_img < 0) {
+            ERR("Failed to transmit image data to client - socket disconnected!");
+            close(connfd);
+            shutdown(sockfd, SHUT_RDWR);
+            setIntegerParam(NDTomo_ConnectionStatus, TOMO_STREAM_DISCONNECTED);
+            callParamCallbacks();
+        } else {
+            LOG_ARGS("Sent %d bytes of image data", (int) ret_img);
+        }
+    }
 
-    printf("TOMO Plugin Recvd frame %d\n", sizeof(NSLS2TomoStreamProtocolHeader_t));
-    size_t ret = send(connfd, &header, 48, MSG_CONFIRM);
-    printf("Sent %d bytes\n", ret);
-
-    // Allocate memory for data to send over 
-    void* imgData = calloc(arrayInfo.totalBytes, 1);
-    memcpy(imgData, pArray->pData, arrayInfo.totalBytes);
-
-    size_t ret_img = send(connfd, imgData, arrayInfo.totalBytes, MSG_CONFIRM);
-    printf("Sent %d bytes of image data\n", ret_img);
-    free(imgData);
-    // If we are manipulating the image/output, we allocate a new scratch frame
-    // You will need to specify dimensions, and data type.
-
-    //pScratch = pNDArrayPool->alloc(ndims, dims, dataType, 0, NULL
-    //if(pScratch == NULL){
-    //    return;
-    //}
-    
-
-    // Process the image here. pArray is read only, and if any image manipulation is required
-    // a copy should be made into pScratch.
-    // 
-    // Note that this expects any external libraries to be thread safe. If they aren't, move
-    // the processing to after this->lock();
-    //
-    // Access data with pArray->pData.
-    // DO NOT CALL pArray.release()
+    // Update angle position
+    setDoubleParam(NDTomo_LastAngle, newAngle);
 
     this->lock();
-
-    // If pScratch was allocated, set the color mode and unique ID attributes here.
-
-    //pScratch->pAttributeList->add("ColorMode", "Color Mode", NDAttrInt32, &colorMode);
-    //pScratch->uniqueId = pArray->uniqueId;
-
-    if(status == asynError){
-        ERR("Image not processed correctly!");
-        return;
-    }
 
     NDPluginDriver::endProcessCallbacks(pArray, true, true);
 
@@ -250,46 +319,10 @@ NDPluginTomo::NDPluginTomo(
 
     const char* functionName = "NDPluginTomo";
     char versionString[25];
-    int opt = 1;
+    printf("Here\n");
 
-	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		perror("socket failed");
-		exit(EXIT_FAILURE);
-	}
-    else {
-	if (setsockopt(sockfd, SOL_SOCKET,
-				SO_REUSEADDR | SO_REUSEPORT, &opt,
-				sizeof(opt))) {
-		perror("setsockopt");
-		exit(EXIT_FAILURE);
-	}
-	serveraddr->sin_family = AF_INET;
-	serveraddr->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-	//serveraddr.sin_addr.s_addr = INADDR_ANY;
-	serveraddr->sin_port = htons(PORT);
-
-        if((bind(sockfd, (struct sockaddr*) serveraddr, sizeof(struct sockaddr))) != 0) {
-            printf("Socket bind failed...\n");
-        }
-        else
-            printf("Socket successfully binded..\n");
-
-
-    if ((listen(sockfd, 3)) != 0) {
-        printf("Listen failed...\n");
-        exit(0);
-    }
-    else
-        printf("Server listening..\n");
-
-    len = sizeof(struct sockaddr_in);
-    connfd = accept(sockfd, (struct sockaddr*) clientaddr, (socklen_t*) &len);
-    if (connfd < 0) {
-        printf("server accept failed...\n");
-        exit(0);
-    }
-    else
-        printf("server accept the client...\n");
+    this->serveraddr = (sockaddr_in*) malloc(sizeof(sockaddr_in));
+    this->clientaddr = (sockaddr*) malloc(sizeof(sockaddr_in));
 
     // Initialize Parameters here, using the string vals and indexes from the header. Ex:
     createParam(NDPluginTomoFrameIDString,  asynParamInt32, &NDTomo_FrameID);
@@ -297,22 +330,34 @@ NDPluginTomo::NDPluginTomo(
     createParam(NDPluginTomoConnectString,  asynParamInt32, &NDTomo_Connect);
     createParam(NDPluginTomoConnectionStatusString,  asynParamInt32, &NDTomo_ConnectionStatus);
     createParam(NDPluginTomoAngleIncrementString,  asynParamFloat64, &NDTomo_AngleIncrement);
+    createParam(NDPluginTomoLastAngleString,  asynParamFloat64, &NDTomo_LastAngle);
 
 
-        // Set some basic plugin info Params
-        setStringParam(NDPluginDriverPluginType, "NDPluginTomo");
-        epicsSnprintf(versionString, sizeof(versionString), "%d.%d.%d", TOMO_VERSION, TOMO_REVISION, TOMO_MODIFICATION);
-        setStringParam(NDDriverVersion, versionString);
-        connectToArrayPort();
-    }
+    // Set some basic plugin info Params
+    setStringParam(NDPluginDriverPluginType, "NDPluginTomo");
+    epicsSnprintf(versionString, sizeof(versionString), "%d.%d.%d", TOMO_VERSION, TOMO_REVISION, TOMO_MODIFICATION);
+    setStringParam(NDDriverVersion, versionString);
+
+    LOG_ARGS("Initializing NDPluginTomo instance with version %s", versionString);
+
+    epicsAtExit(exitCallback, (void*) this);
+
+    connectToArrayPort();
+    printf("Here3\n");
+
+    epicsThreadCreate("ClientConnectionThread", epicsThreadPriorityMedium, 
+                       epicsThreadStackMedium, connectToClientThread, this);
 }
 
 
 NDPluginTomo::~NDPluginTomo(){
     printf("Closing socket...\n");
     close(connfd);
+    free(serveraddr);
+    free(clientaddr);
     shutdown(sockfd, SHUT_RDWR);
 }
+
 
 
 /**
