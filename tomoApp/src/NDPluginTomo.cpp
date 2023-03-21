@@ -290,9 +290,10 @@ NDPluginTomo::NDPluginTomo(
         printf("server accept the client...\n");
 
     // Initialize Parameters here, using the string vals and indexes from the header. Ex:
-    // createParam(NDPluginTomoOctetString, 	asynParamOctet, 	&NDPluginTomoOctet);  -> asynParamOctet records (stringin, stringout, waveform) 
-    // createParam(NDPluginTomoIntegerString, 	asynParamInt32, 	&NDPluginTomoInteger);  -> asynInt32 records (bo, bi, mbbo, mbbi, ao, ai)
-    // createParam(NDPluginTomoFloatString, 	asynParamFloat64, 	&NDPluginTomoFloat);  -> asynParamFloat64 records (ao, ai, waveform) 
+    createParam(NDPluginTomoFrameIDString,  asynParamInt32, &NDTomo_FrameID);
+    createParam(NDPluginTomoFrameTypeString,  asynParamInt32, &NDTomo_FrameType);
+    createParam(NDPluginTomoConnectString,  asynParamInt32, &NDTomo_Connect);
+    createParam(NDPluginTomoConnectionStatusString,  asynParamInt32, &NDTomo_ConnectionStatus);
 
 
         // Set some basic plugin info Params

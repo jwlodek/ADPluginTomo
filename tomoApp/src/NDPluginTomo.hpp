@@ -46,6 +46,10 @@ using namespace std;
 
 // Define the PVStrings for all of your PV values here in the following format
 //#define NDPluginTomoPVNameString 	"TOMO_PVNAME" 		//DTYP (ex. asynInt32, asynFloat64, asynOctet)
+#define NDPluginTomoFrameIDString           "NDTOMO_FRAME_ID"     //asynInt32
+#define NDPluginTomoFrameTypeString         "NDTOMO_FRAME_TYPE"   //asynInt32
+#define NDPluginTomoConnectString           "NDTOMO_CONN"         //asynInt32
+#define NDPluginTomoConnectionStatusString  "NDTOMO_CONN_STATUS"  //asynInt32
 
 
 // Define all necessary tpyes, structs, and enums here
@@ -68,11 +72,13 @@ class NDPluginTomo : public NDPluginDriver {
 
         // Define the Param index variables here. Ex:
         // int NDPluginTomoPVName;
-
-
+        int NDTomo_FrameID;
+        int NDTomo_FrameType;
+        int NDTomo_Connect;
+        int NDTomo_ConnectionStatus;
         // Define these two variables as the first and last param indexes.
-        #define ND_TOMO_FIRST_PARAM 0
-        #define ND_TOMO_LAST_PARAM 0 
+        #define ND_TOMO_FIRST_PARAM NDTomo_FrameID
+        #define ND_TOMO_LAST_PARAM NDTomo_ConnStatus
 
     private:
 

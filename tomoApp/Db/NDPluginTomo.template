@@ -1,1 +1,93 @@
 include "NDPluginBase.template"
+
+
+record(bo, "$(P)$(R)FrameIdentifier") {
+    field(DESC, "Unique identifier to use for reconstruction")
+
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))NDTOMO_FRAME_ID")
+    field(VAL,  "0")
+    field(ZNAM, "Timestamp")
+    field(ONAM, "Angle")
+    info(autosaveFields, "VAL")
+}
+record(bi, "$(P)$(R)FrameIdentifier_RBV"){
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))NDTOMO_FRAME_ID")
+    field(ZNAM, "Timestamp")
+    field(ONAM, "Angle")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(mbbo, "$(P)$(R)FrameType"){
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NDTOMO_FRAME_TYPE")
+    field(ZRST, "Dark")
+    field(ZRVL, "0")
+    field(ONST, "Background")
+    field(ONVL, "1")
+    field(TWST, "Data / Projection")
+    field(TWVL, "2")
+    field(VAL,  "0")
+    info(autosaveFields, "VAL")
+}
+record(mbbi, "$(P)$(R)FrameType_RBV"){
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))NDTOMO_FRAME_TYPE")
+    field(ZRST, "Dark")
+    field(ZRVL, "0")
+    field(ONST, "Background")
+    field(ONVL, "1")
+    field(TWST, "Data / Projection")
+    field(TWVL, "2")
+    field(VAL,  "0")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(bo, "$(P)$(R)Connect") {
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))NDTOMO_CONN")
+    field(VAL,  "0")
+    field(ZNAM, "Disconnect")
+    field(ONAM, "Connect")
+    info(autosaveFields, "VAL")
+}
+record(bi, "$(P)$(R)Disconnect_RBV"){
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))NDTOMO_CONN")
+    field(ZNAM, "Disconnect")
+    field(ONAM, "Connect")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(mbbo, "$(P)$(R)ConnectionStatus"){
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NDTOMO_CONN_STATUS")
+    field(ZRST, "Disconnected")
+    field(ZRVL, "0")
+    field(ONST, "Awaiting Connection...")
+    field(ONVL, "1")
+    field(TWST, "Connected")
+    field(TWVL, "2")
+    field(VAL,  "0")
+    info(autosaveFields, "VAL")
+}
+record(mbbi, "$(P)$(R)ConnectionStatus_RBV"){
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))NDTOMO_CONN_STATUS")
+    field(ZRST, "Disconnected")
+    field(ZRVL, "0")
+    field(ONST, "Awaiting Connection...")
+    field(ONVL, "1")
+    field(TWST, "Connected")
+    field(TWVL, "2")
+    field(VAL,  "0")
+    field(SCAN, "I/O Intr")
+}
