@@ -112,6 +112,17 @@ record(ai, "$(P)$(R)AngleIncrement_RBV"){
 }
 
 
+record(ao, "$(P)$(R)LastAngle"){
+    field(PINI, "YES")
+    field(DTYP, "asynFloat64")
+    field(VAL, "0")
+    field(PREC, "2")
+    field(EGU, "deg")
+    field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NDTOMO_LAST_ANGLE")
+    info(autosaveFields, "VAL")
+}
+
+
 record(ai, "$(P)$(R)LastAngle_RBV"){
     field(DTYP, "asynFloat64")
     field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NDTOMO_LAST_ANGLE")

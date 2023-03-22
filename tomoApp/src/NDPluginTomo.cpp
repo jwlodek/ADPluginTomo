@@ -163,8 +163,14 @@ void NDPluginTomo::connectToClient(void* pPvt){
         connfd = accept(sockfd, (struct sockaddr*) clientaddr, (socklen_t*) &len);
         if (connfd < 0) {
             setIntegerParam(NDTomo_ConnectionStatus, TOMO_STREAM_DISCONNECTED);
-            ERR("Server failed to accept client!");
-            exit(0);
+            // Only print error message if we failed to connect while plugin enabled.
+            int enabled;
+            getIntegerParam(NDPluginDriverEnableCallbacks, &enabled);
+            if(enabled == 1) {
+                ERR("Server failed to accept client!");
+            } else {
+                LOG("Cancelled socket connection.");
+            }
         } else {
             setIntegerParam(NDTomo_ConnectionStatus, TOMO_STREAM_CONNECTED);
             LOG("Connected to client.");
@@ -193,6 +199,22 @@ asynStatus NDPluginTomo::writeInt32(asynUser* pasynUser, epicsInt32 value){
     LOG_ARGS("function = %d value=%d", function, value);
 
     // TODO: Handle callbacks for any integer param write ops
+    if(function == NDPluginDriverEnableCallbacks) {
+        if(value == 0){
+            int connectionStatus;
+            getIntegerParam(NDTomo_ConnectionStatus, &connectionStatus);
+            if(connectionStatus == TOMO_STREAM_CONNECTED){
+                sockClose(sockfd);
+                sockClose(connfd);
+            } else if (connectionStatus == TOMO_STREAM_AWAITING_CONNECTION){
+                sockClose(sockfd);
+            }
+            setIntegerParam(NDTomo_ConnectionStatus, TOMO_STREAM_DISCONNECTED);
+        } else {
+            epicsThreadCreate("ClientConnectionThread", epicsThreadPriorityMedium, 
+                                epicsThreadStackMedium, connectToClientThread, this);
+        }
+    }
     
     if(function < ND_TOMO_FIRST_PARAM){
         status = NDPluginDriver::writeInt32(pasynUser, value);
@@ -269,8 +291,8 @@ void NDPluginTomo::processCallbacks(NDArray *pArray){
     size_t ret = send(connfd, &header, sizeof(NSLS2TomoStreamProtocolHeader_t), MSG_CONFIRM);
     if((int) ret < 0){
         ERR("Failed to transmit header to client - socket disconnected!");
-        close(connfd);
-        shutdown(sockfd, SHUT_RDWR);
+        sockClose(connfd);
+        sockClose(sockfd);
         setIntegerParam(NDTomo_ConnectionStatus, TOMO_STREAM_DISCONNECTED);
         callParamCallbacks();
     } else {
@@ -279,8 +301,8 @@ void NDPluginTomo::processCallbacks(NDArray *pArray){
         size_t ret_img = send(connfd, pArray->pData, arrayInfo.totalBytes, MSG_CONFIRM);
         if((int) ret_img < 0) {
             ERR("Failed to transmit image data to client - socket disconnected!");
-            close(connfd);
-            shutdown(sockfd, SHUT_RDWR);
+            sockClose(connfd);
+            sockClose(sockfd);
             setIntegerParam(NDTomo_ConnectionStatus, TOMO_STREAM_DISCONNECTED);
             callParamCallbacks();
         } else {
@@ -344,18 +366,15 @@ NDPluginTomo::NDPluginTomo(
 
     connectToArrayPort();
     printf("Here3\n");
-
-    epicsThreadCreate("ClientConnectionThread", epicsThreadPriorityMedium, 
-                       epicsThreadStackMedium, connectToClientThread, this);
 }
 
 
 NDPluginTomo::~NDPluginTomo(){
     printf("Closing socket...\n");
-    close(connfd);
+    sockClose(connfd);
+    sockClose(sockfd);
     free(serveraddr);
     free(clientaddr);
-    shutdown(sockfd, SHUT_RDWR);
 }
 
 
