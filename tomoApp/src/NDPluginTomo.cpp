@@ -116,7 +116,6 @@ static void connectToClientThread(void* pPvt) {
 
 
 void NDPluginTomo::connectToClient(void* pPvt){
-    printf("Here2\n");
     const char* functionName = "connectToClient";
     int opt = 1;
     TomoConnStatus_t connectionStatus;
@@ -139,10 +138,14 @@ void NDPluginTomo::connectToClient(void* pPvt){
             return;
         }
         serveraddr->sin_family = AF_INET;
-        serveraddr->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        //serveraddr.sin_addr.s_addr = INADDR_ANY;
-        serveraddr->sin_port = htons(PORT);
-        printf("Binding to socket\n");
+
+        // convert input network interface IP from string into s_addr
+        struct in_addr ip_addr;
+        inet_aton(this->networkInterface, &ip_addr);
+        serveraddr->sin_addr.s_addr = ip_addr.s_addr;
+        serveraddr->sin_port = htons(this->portNumber);
+
+        LOG("Binding to socket...");
         if((bind(sockfd, (struct sockaddr*) serveraddr, sizeof(struct sockaddr))) != 0) {
             ERR("Socket binding failed!");
         } else {
@@ -178,7 +181,6 @@ void NDPluginTomo::connectToClient(void* pPvt){
         callParamCallbacks();
     }
 }
-
 
 
 /**
@@ -327,6 +329,7 @@ void NDPluginTomo::processCallbacks(NDArray *pArray){
 
 //constructror from base class, replace with your plugin name
 NDPluginTomo::NDPluginTomo(
+        const char* networkInterface, int portNumber,
         const char *portName, int queueSize, int blockingCallbacks,
         const char *NDArrayPort, int NDArrayAddr,
         int maxBuffers, size_t maxMemory,
@@ -341,7 +344,13 @@ NDPluginTomo::NDPluginTomo(
 
     const char* functionName = "NDPluginTomo";
     char versionString[25];
-    printf("Here\n");
+
+    this->networkInterface = networkInterface;
+    if(portNumber == 0) {
+        this->portNumber = DEFAULT_PORT;
+    } else {
+        this->portNumber = portNumber;
+    }
 
     this->serveraddr = (sockaddr_in*) malloc(sizeof(sockaddr_in));
     this->clientaddr = (sockaddr*) malloc(sizeof(sockaddr_in));
@@ -353,24 +362,28 @@ NDPluginTomo::NDPluginTomo(
     createParam(NDPluginTomoConnectionStatusString,  asynParamInt32, &NDTomo_ConnectionStatus);
     createParam(NDPluginTomoAngleIncrementString,  asynParamFloat64, &NDTomo_AngleIncrement);
     createParam(NDPluginTomoLastAngleString,  asynParamFloat64, &NDTomo_LastAngle);
-
+    createParam(NDPluginTomoProtocolServerAddrString, asynParamOctet, &NDTomo_ServerAddr);
 
     // Set some basic plugin info Params
     setStringParam(NDPluginDriverPluginType, "NDPluginTomo");
     epicsSnprintf(versionString, sizeof(versionString), "%d.%d.%d", TOMO_VERSION, TOMO_REVISION, TOMO_MODIFICATION);
     setStringParam(NDDriverVersion, versionString);
 
+    char serverAddrFull[128];
+    epicsSnprintf(serverAddrFull, sizeof(serverAddrFull), "%s:%d", networkInterface, this->portNumber);
+    setStringParam(NDTomo_ServerAddr, serverAddrFull);
+
     LOG_ARGS("Initializing NDPluginTomo instance with version %s", versionString);
 
     epicsAtExit(exitCallback, (void*) this);
 
     connectToArrayPort();
-    printf("Here3\n");
 }
 
 
 NDPluginTomo::~NDPluginTomo(){
-    printf("Closing socket...\n");
+    const char* functionName = "~NDPluginTomo";
+    LOG("Closing socket...");
     sockClose(connfd);
     sockClose(sockfd);
     free(serveraddr);
@@ -386,50 +399,35 @@ NDPluginTomo::~NDPluginTomo(){
  * @params[in]	-> all passed to constructor
  */
 extern "C" int NDTomoConfigure(
-        const char *portName, int queueSize, int blockingCallbacks,
-        const char *NDArrayPort, int NDArrayAddr,
-        int maxBuffers, size_t maxMemory,
-        int priority, int stackSize, int maxThreads){
+        const char* networkInterface, int portNumber,
+        const char *portName, const char *NDArrayPort){
 
     // Initialize instance of our plugin and start it.
-    NDPluginTomo *pPlugin = new NDPluginTomo(portName, queueSize, blockingCallbacks, NDArrayPort, NDArrayAddr, maxBuffers, maxMemory, priority, stackSize, maxThreads);
+    NDPluginTomo *pPlugin = new NDPluginTomo(networkInterface, portNumber, 
+                                             portName, 20, 0, NDArrayPort, 
+                                             0, 0, 0, 0, 0, 1);
     return pPlugin->start();
 }
 
 
 /* IOC shell arguments passed to the plugin configure function */
-static const iocshArg initArg0 = { "portName", iocshArgString };
-static const iocshArg initArg1 = { "frame queue size", iocshArgInt };
-static const iocshArg initArg2 = { "blocking callbacks", iocshArgInt };
+static const iocshArg initArg0 = { "networkInterface", iocshArgString };
+static const iocshArg initArg1 = { "portNumber", iocshArgInt };
+static const iocshArg initArg2 = { "portName", iocshArgString };
 static const iocshArg initArg3 = { "NDArrayPort", iocshArgString };
-static const iocshArg initArg4 = { "NDArrayAddr", iocshArgInt };
-static const iocshArg initArg5 = { "maxBuffers", iocshArgInt };
-static const iocshArg initArg6 = { "maxMemory", iocshArgInt };
-static const iocshArg initArg7 = { "priority", iocshArgInt };
-static const iocshArg initArg8 = { "stackSize", iocshArgInt };
-static const iocshArg initArg9 = { "maxThreads", iocshArgInt };
 static const iocshArg * const initArgs[] = {&initArg0,
                                             &initArg1,
                                             &initArg2,
-                                            &initArg3,
-                                            &initArg4,
-                                            &initArg5,
-                                            &initArg6,
-                                            &initArg7,
-                                            &initArg8,
-                                            &initArg9};
+                                            &initArg3};
 
 
 // Define the path to your plugin's extern configure function above
-static const iocshFuncDef initFuncDef = { "NDTomoConfigure", 10, initArgs };
+static const iocshFuncDef initFuncDef = { "NDTomoConfigure", 4, initArgs };
 
 
 /* link the configure function with the passed args, and call it from the IOC shell */
 static void initCallFunc(const iocshArgBuf *args){
-    NDTomoConfigure(
-            args[0].sval, args[1].ival, args[2].ival,
-            args[3].sval, args[4].ival, args[5].ival,
-            args[6].ival, args[7].ival, args[8].ival, args[9].ival);
+    NDTomoConfigure(args[0].sval, args[1].ival, args[2].sval, args[5].sval);
 }
 
 

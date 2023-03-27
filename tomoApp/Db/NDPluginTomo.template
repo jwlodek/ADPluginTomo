@@ -130,3 +130,12 @@ record(ai, "$(P)$(R)LastAngle_RBV"){
     field(EGU, "deg")
     field(SCAN, "I/O Intr")
 }
+
+record(waveform, "$(P)$(R)ProtocolServerAddress_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))NDTOMO_SERVER_ADDR")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}

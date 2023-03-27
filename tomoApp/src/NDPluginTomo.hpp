@@ -40,7 +40,7 @@ using namespace std;
 #define TOMO_REVISION       0
 #define TOMO_MODIFICATION   0
 
-#define PORT 8090
+#define DEFAULT_PORT 8090
 #define SA struct sockaddr
 
 
@@ -52,6 +52,7 @@ using namespace std;
 #define NDPluginTomoConnectionStatusString  "NDTOMO_CONN_STATUS"  //asynInt32
 #define NDPluginTomoAngleIncrementString    "NDTOMO_ANGLE_INC"    //asynFloat64
 #define NDPluginTomoLastAngleString         "NDTOMO_LAST_ANGLE"   //asynFloat64
+#define NDPluginTomoProtocolServerAddrString "NDTOMO_SERVER_ADDR" //asynOctet
 
 
 typedef enum TomoConnStatus {
@@ -64,7 +65,7 @@ typedef enum TomoConnStatus {
 /* Plugin class, extends plugin driver */
 class NDPluginTomo : public NDPluginDriver {
     public:
-        NDPluginTomo(const char *portName, int queueSize, int blockingCallbacks,
+        NDPluginTomo(const char* networkInterface, int portNumber, const char *portName, int queueSize, int blockingCallbacks,
             const char* NDArrayPort, int NDArrayAddr, int maxBuffers,
             size_t maxMemory, int priority, int stackSize, int maxThreads);
 
@@ -85,9 +86,10 @@ class NDPluginTomo : public NDPluginDriver {
         int NDTomo_ConnectionStatus;
         int NDTomo_AngleIncrement;
         int NDTomo_LastAngle;
+        int NDTomo_ServerAddr;
         // Define these two variables as the first and last param indexes.
         #define ND_TOMO_FIRST_PARAM NDTomo_FrameID
-        #define ND_TOMO_LAST_PARAM NDTomo_LastAngle
+        #define ND_TOMO_LAST_PARAM NDTomo_ServerAddr
 
 
     private:
@@ -96,6 +98,8 @@ class NDPluginTomo : public NDPluginDriver {
         int sockfd, connfd, len;
         struct sockaddr_in* serveraddr;
         struct sockaddr* clientaddr;
+        const char* networkInterface;
+        int portNumber;
         // init all global variables here
 
         // init all plugin additional functions here
